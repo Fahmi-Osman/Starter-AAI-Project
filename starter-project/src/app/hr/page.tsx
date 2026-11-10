@@ -9,13 +9,13 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { InboxIcon } from "@/components/ui/Icons";
 
 // The HR queue (Part B2 §13): every PENDING_HR_REVIEW request, any division,
-// oldest first. HR sees requests that already passed a supervisor.
+// newest first. HR sees requests that already passed a supervisor.
 export default async function HRPage() {
   await requireRole("HR");
 
   const queue = await prisma.leaveRequest.findMany({
     where: { status: "PENDING_HR_REVIEW" },
-    orderBy: { createdAt: "asc" },
+    orderBy: { createdAt: "desc" },
     include: { user: true },
   });
 

@@ -9,7 +9,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { InboxIcon } from "@/components/ui/Icons";
 
 // The supervisor queue (Part B2 §13): SUBMITTED requests from employees of
-// this supervisor's own division, oldest first, with the display-only due
+// this supervisor's own division, newest first, with the display-only due
 // date. The query itself filters the division — data can't leak by accident.
 export default async function SupervisorPage() {
   const supervisor = await requireRole("SUPERVISOR");
@@ -19,7 +19,7 @@ export default async function SupervisorPage() {
       status: "SUBMITTED",
       user: { role: "EMPLOYEE", division: supervisor.division },
     },
-    orderBy: { createdAt: "asc" },
+    orderBy: { createdAt: "desc" },
     include: { user: true },
   });
 

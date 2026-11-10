@@ -10,6 +10,7 @@ import {
   isOverdue,
 } from "../src/lib/leave";
 import { prisma } from "../src/lib/db";
+import { buildLeaveWhere, filtersAreEmpty, parseLeaveFilters } from "../src/lib/leave-filters";
 
 const d = (iso: string) => new Date(`${iso}T00:00:00Z`);
 
@@ -64,7 +65,18 @@ async function main() {
   expect("submitted 2026-10-20 is overdue on 2026-11-10", isOverdue(d("2026-10-20"), d("2026-11-10")), true);
   expect("submitted yesterday is not overdue", isOverdue(d("2026-11-09"), d("2026-11-10")), false);
 
-  // 7. Seeded row counts.
+  // 7. Admin filters: same rules for the page and the CSV (AC-24).
+  expect("empty filters are empty", filtersAreEmpty(parseLeaveFilters(new URLSearchParams())), true);
+  expect("bad values are ignored", parseLeaveFilters(new URLSearchParams("type=NOPE&status=NOPE&from=13/01/2026")), {
+    employee: "", type: "", status: "", from: "", to: "",
+  });
+  expect("status filter reaches the query", buildLeaveWhere(parseLeaveFilters(new URLSearchParams("status=APPROVED"))), { status: "APPROVED" });
+  const ranged = buildLeaveWhere(parseLeaveFilters(new URLSearchParams("type=SICK&from=2026-12-01&to=2026-12-31")));
+  expect("range overlaps: start before range end", (ranged.startDate as { lte: Date }).lte.toISOString().slice(0, 10), "2026-12-31");
+  expect("range overlaps: end after range start", (ranged.endDate as { gte: Date }).gte.toISOString().slice(0, 10), "2026-12-01");
+  expect("type filter applies", ranged.leaveType, "SICK");
+
+  // 8. Seeded row counts.
   expect("users", await prisma.user.count(), 7);
   expect("balances", await prisma.leaveBalance.count(), 18);
   expect("requests", await prisma.leaveRequest.count(), 12);

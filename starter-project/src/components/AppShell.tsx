@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { getCurrentUser, roleHome } from "@/lib/auth";
-import { ROLE_LABELS, type Role } from "@/lib/constants";
+import { prisma } from "@/lib/db";
+import { formatTimestamp, ROLE_LABELS, type Role } from "@/lib/constants";
 import { Avatar } from "./ui/Avatar";
 import { LogoutButton } from "./LogoutButton";
+import { NotificationBell, type BellItem } from "./NotificationBell";
 
 // The frame around every page: a top bar, then the page. The top bar shows the
 // app name, who is logged in, and Log out (design §4).
@@ -13,6 +15,21 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
 
   const role = user.role as Role;
   const roleLabel = ROLE_LABELS[role] ?? user.role;
+
+  // This user's newest notifications (the list is scoped by userId in the
+  // query; nobody else's can appear).
+  const recent = await prisma.notification.findMany({
+    where: { userId: user.id },
+    orderBy: { createdAt: "desc" },
+    take: 10,
+  });
+  const bellItems: BellItem[] = recent.map((n) => ({
+    id: n.id,
+    message: n.message,
+    read: n.read,
+    createdAt: formatTimestamp(n.createdAt),
+    href: `${roleHome(role)}/leave/${n.requestId}`,
+  }));
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -25,6 +42,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
         </Link>
 
         <div className="flex items-center gap-3">
+          <NotificationBell items={bellItems} />
           {/* Who is logged in: initials on a phone, name and role on larger screens. */}
           <div className="hidden text-right md:block">
             <p className="text-sm font-medium text-slate-900">{user.name}</p>

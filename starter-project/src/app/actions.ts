@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
-import { requireUser, startSession, endSession, roleHome } from "@/lib/auth";
+import { getCurrentUser, requireUser, startSession, endSession, roleHome } from "@/lib/auth";
 import type { Role } from "@/lib/constants";
 import { LEAVE_TYPES } from "@/lib/constants";
 import { allowedAction, calendarDays, submitCheck, workingDays } from "@/lib/leave";
@@ -211,4 +211,19 @@ export async function updateLeaveDraft(
   revalidatePath(`/employee/leave/${id}`);
   revalidatePath("/", "layout");
   redirect(`/employee/leave/${id}`);
+}
+
+// ── Notifications (Task 10) ────────────────────────────────────────────────
+
+// Only the recipient can mark a notification read (Part A2 rule 11); the
+// click then continues to the request behind it (AC-23).
+export async function markNotificationRead(id: number, href: string): Promise<void> {
+  const user = await getCurrentUser();
+  if (!user) return;
+  await prisma.notification.updateMany({
+    where: { id, userId: user.id },
+    data: { read: true },
+  });
+  revalidatePath("/", "layout");
+  redirect(href);
 }

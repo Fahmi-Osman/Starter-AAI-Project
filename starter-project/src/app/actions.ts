@@ -4,11 +4,12 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
-import { getCurrentUser, requireUser, startSession, endSession, roleHome } from "@/lib/auth";
+import { requireUser, startSession, endSession, roleHome } from "@/lib/auth";
 import type { Role } from "@/lib/constants";
 import { LEAVE_TYPES } from "@/lib/constants";
-import { allowedAction, calendarDays } from "@/lib/leave";
+import { allowedAction, calendarDays, submitCheck, workingDays } from "@/lib/leave";
 import type { RequestTarget } from "@/lib/leave";
+import { notifySupervisors } from "@/lib/notifications";
 
 // Server actions: functions that run on the server when a button is pressed.
 // Every leave action re-checks the Part A2 §11.7 action table itself —
@@ -108,6 +109,40 @@ export async function logoutAction(): Promise<void> {
   // reuse the cached logged-in layout and show the frame around the login page.
   revalidatePath("/", "layout");
   redirect("/login");
+}
+
+// ── Employee: submit and cancel (Tasks 9 and 12) ──────────────────────────
+
+export async function submitLeave(
+  id: number,
+  _prev: ActionResult,
+  _formData: FormData,
+): Promise<ActionResult> {
+  const user = await requireUser();
+  const request = await prisma.leaveRequest.findUnique({
+    where: { id },
+    include: { user: true },
+  });
+  if (!request || request.userId !== user.id) {
+    return { error: "Request not found." };
+  }
+  if (!allowedAction("SUBMIT", { id: user.id, role: user.role as Role }, toTarget(request, user))) {
+    return { error: "This request cannot be submitted." };
+  }
+
+  // The four submission checks (Part A2 rules 2 and 4–6), run on the
+  // stored values — the form is a helper, this is the gate.
+  const problem = await submitCheck(request);
+  if (problem) return { error: problem };
+
+  await prisma.leaveRequest.update({ where: { id }, data: { status: "SUBMITTED" } });
+  await notifySupervisors(request, workingDays(request.startDate, request.endDate));
+
+  revalidatePath("/employee");
+  revalidatePath(`/employee/leave/${id}`);
+  revalidatePath("/supervisor");
+  revalidatePath("/", "layout");
+  return { ok: true };
 }
 
 // ── Employee: create and edit drafts (Task 8) ─────────────────────────────

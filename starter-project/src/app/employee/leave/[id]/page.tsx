@@ -5,10 +5,11 @@ import { prisma } from "@/lib/db";
 import { allowedAction } from "@/lib/leave";
 import { formatTimestamp, type Role } from "@/lib/constants";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Card, CardHeader } from "@/components/ui/Card";
+import { Card } from "@/components/ui/Card";
 import { buttonClasses } from "@/components/ui/Button";
 import { ArrowLeftIcon } from "@/components/ui/Icons";
 import { LeaveDetail } from "@/components/LeaveDetail";
+import { RequestActions } from "@/components/RequestActions";
 
 // The owner's request detail (Part B2 §13). Someone else's request id is
 // Not found here (AC-22). Action buttons are added by later tasks.
@@ -28,15 +29,14 @@ export default async function EmployeeLeaveDetailPage({
   });
   if (!request || request.userId !== user.id) notFound();
 
-  const canEdit = allowedAction(
-    "EDIT",
-    { id: user.id, role: user.role as Role },
-    {
-      userId: request.userId,
-      status: request.status as never,
-      employeeDivision: request.user.division,
-    },
-  );
+  const actor = { id: user.id, role: user.role as Role };
+  const target = {
+    userId: request.userId,
+    status: request.status as never,
+    employeeDivision: request.user.division,
+  };
+  const canEdit = allowedAction("EDIT", actor, target);
+  const canSubmit = allowedAction("SUBMIT", actor, target);
 
   return (
     <>
@@ -58,6 +58,7 @@ export default async function EmployeeLeaveDetailPage({
       />
       <Card className="p-6">
         <LeaveDetail request={request} />
+        <RequestActions requestId={requestId} canSubmit={canSubmit} />
       </Card>
     </>
   );

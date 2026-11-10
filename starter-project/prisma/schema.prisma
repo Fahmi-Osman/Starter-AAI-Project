@@ -23,4 +23,63 @@ model User {
   designation      String
   division         String
   createdAt        DateTime @default(now())
+
+  leaveRequests LeaveRequest[]
+  leaveComments LeaveComment[]
+  balances      LeaveBalance[]
+  notifications Notification[]
+}
+
+// One row per leave application (design Part A2 §9). Calendar/working days
+// are never stored: src/lib/leave.ts works them out from the two dates.
+model LeaveRequest {
+  id              Int      @id @default(autoincrement())
+  userId          Int
+  user            User     @relation(fields: [userId], references: [id])
+  leaveType       String // ANNUAL | SICK | COMPASSIONATE | UNPAID
+  startDate       DateTime // stored at UTC midnight; both days count
+  endDate         DateTime
+  status          String // DRAFT | SUBMITTED | SENT_BACK | PENDING_HR_REVIEW | APPROVED | REJECTED | CANCELLED
+  hasCertificate  Boolean  @default(false)
+  certificateNote String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  comments      LeaveComment[]
+  notifications Notification[]
+}
+
+// Rejection reasons and send-back notes. Never edited or deleted (rule 9).
+model LeaveComment {
+  id        Int      @id @default(autoincrement())
+  requestId Int
+  request   LeaveRequest @relation(fields: [requestId], references: [id])
+  userId    Int
+  author    User     @relation(fields: [userId], references: [id])
+  body      String
+  createdAt DateTime @default(now())
+}
+
+// One row per person per limited leave type. UNPAID has no row: unlimited.
+// Remaining balance is calculated, not stored (rule 5).
+model LeaveBalance {
+  id          Int    @id @default(autoincrement())
+  userId      Int
+  user        User   @relation(fields: [userId], references: [id])
+  leaveType   String // ANNUAL | SICK | COMPASSIONATE
+  daysAllowed Int
+
+  @@unique([userId, leaveType])
+}
+
+// In-app bell message. Only the app creates these (rule 11).
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  requestId Int
+  request   LeaveRequest @relation(fields: [requestId], references: [id])
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
 }

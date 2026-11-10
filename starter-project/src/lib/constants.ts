@@ -46,6 +46,61 @@ export function isRole(value: string): value is Role {
   return (ROLES as readonly string[]).includes(value);
 }
 
+// ── Leave Request module (design Part A2 §9–§11) ────────────────────────
+// All stored as plain text because SQLite has no enums; these lists are the
+// only valid values, the same way roles and divisions work.
+
+export const LEAVE_TYPES = ["ANNUAL", "SICK", "COMPASSIONATE", "UNPAID"] as const;
+export type LeaveType = (typeof LEAVE_TYPES)[number];
+
+export const LEAVE_TYPE_LABELS: Record<LeaveType, string> = {
+  ANNUAL: "Annual",
+  SICK: "Sick",
+  COMPASSIONATE: "Compassionate",
+  UNPAID: "Unpaid",
+};
+
+// The types that need a balance row. UNPAID is unlimited and has none.
+export const BALANCED_LEAVE_TYPES = ["ANNUAL", "SICK", "COMPASSIONATE"] as const;
+
+export const LEAVE_STATUSES = [
+  "DRAFT",
+  "SUBMITTED",
+  "SENT_BACK",
+  "PENDING_HR_REVIEW",
+  "APPROVED",
+  "REJECTED",
+  "CANCELLED",
+] as const;
+export type LeaveStatus = (typeof LEAVE_STATUSES)[number];
+
+export const LEAVE_STATUS_LABELS: Record<LeaveStatus, string> = {
+  DRAFT: "Draft",
+  SUBMITTED: "Submitted",
+  SENT_BACK: "Sent back for revision",
+  PENDING_HR_REVIEW: "Pending HR Review",
+  APPROVED: "Approved",
+  REJECTED: "Rejected",
+  CANCELLED: "Cancelled",
+};
+
+// The fixed 2026 public-holiday list (Part A2 rule 3). Counted toward
+// leave duration, subtracted from working days, never blocks a request.
+// Workshop demo data — see docs/specs/02-design.md Part A2.
+export const HOLIDAYS_2026: readonly string[] = [
+  "2026-01-01", // New Year's Day
+  "2026-02-17", // Lunar New Year
+  "2026-03-20", // Eid al-Fitr (day 1)
+  "2026-03-21", // Eid al-Fitr (day 2)
+  "2026-05-01", // Labour Day
+  "2026-05-27", // Eid al-Adha
+  "2026-08-17", // Independence Day
+  "2026-12-25", // Christmas
+];
+
+// Approval due date per level, in working days (display only — requirements U17).
+export const APPROVAL_DUE_WORKING_DAYS = 3;
+
 // The company's time zone. It decides what "today" is and how dates are shown.
 export const APP_TIME_ZONE = "Asia/Brunei";
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useActionState } from "react";
+import { useState, useActionState, useTransition } from "react";
 import { cancelLeave, submitLeave } from "@/app/actions";
 import { Button } from "./ui/Button";
 import { ConfirmDialog } from "./ui/ConfirmDialog";
@@ -27,6 +27,9 @@ export function RequestActions({
     {},
   );
   const [askCancel, setAskCancel] = useState(false);
+  // React requires the returned action to run inside a transition when it is
+  // called outside a form submit (as the confirm dialog does).
+  const [, startTransition] = useTransition();
 
   if (!canSubmit && !canCancel) return null;
 
@@ -64,7 +67,9 @@ export function RequestActions({
         onCancel={() => setAskCancel(false)}
         onConfirm={() => {
           setAskCancel(false);
-          void cancelAction(new FormData());
+          startTransition(() => {
+            cancelAction(new FormData());
+          });
         }}
       />
     </div>

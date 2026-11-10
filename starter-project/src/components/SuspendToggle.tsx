@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useActionState } from "react";
+import { useState, useActionState, useTransition } from "react";
 import { setSuspended } from "@/app/actions";
 import { Button } from "./ui/Button";
 import { ConfirmDialog } from "./ui/ConfirmDialog";
@@ -14,6 +14,9 @@ export function SuspendToggle({ userId, suspended }: { userId: number; suspended
     setSuspended.bind(null, userId, !suspended),
     {},
   );
+  // React requires the returned action to run inside a transition when it is
+  // called outside a form submit (as the confirm dialog does).
+  const [, startTransition] = useTransition();
 
   return (
     <div>
@@ -38,7 +41,9 @@ export function SuspendToggle({ userId, suspended }: { userId: number; suspended
         onCancel={() => setAsk(false)}
         onConfirm={() => {
           setAsk(false);
-          void action(new FormData());
+          startTransition(() => {
+            action(new FormData());
+          });
         }}
       />
     </div>

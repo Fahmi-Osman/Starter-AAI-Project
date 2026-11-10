@@ -157,7 +157,9 @@ export async function submitLeave(
   revalidatePath(`/employee/leave/${id}`);
   revalidatePath("/supervisor");
   revalidatePath("/", "layout");
-  return { ok: true };
+  // Spec §15: after saving, submitting or cancelling you land back on the
+  // employee list with the new status visible.
+  redirect("/employee");
 }
 
 // ── Employee: create and edit drafts (Task 8) ─────────────────────────────
@@ -283,7 +285,7 @@ export async function approveAsSupervisor(
     `Your ${typeLabel(request.leaveType)} request was approved by your supervisor and is now with HR.`,
   );
   revalidateAfterDecision(id, request.userId);
-  return { ok: true };
+  redirect("/supervisor"); // spec §15: land back on the queue
 }
 
 export async function rejectAsSupervisor(
@@ -305,7 +307,7 @@ export async function rejectAsSupervisor(
     `Your ${typeLabel(request.leaveType)} request was rejected. Reason: ${comment}`,
   );
   revalidateAfterDecision(id, request.userId);
-  return { ok: true };
+  redirect("/supervisor"); // spec §15: land back on the queue
 }
 
 export async function sendBackAsSupervisor(
@@ -327,7 +329,7 @@ export async function sendBackAsSupervisor(
     `Your ${typeLabel(request.leaveType)} request was sent back for revision. Note: ${comment}`,
   );
   revalidateAfterDecision(id, request.userId);
-  return { ok: true };
+  redirect("/supervisor"); // spec §15: land back on the queue
 }
 
 export async function cancelLeave(
@@ -352,7 +354,9 @@ export async function cancelLeave(
   revalidatePath(`/employee/leave/${id}`);
   revalidatePath("/supervisor");
   revalidatePath("/", "layout");
-  return { ok: true };
+  // Spec §15: after saving, submitting or cancelling you land back on the
+  // employee list with the new status visible.
+  redirect("/employee");
 }
 
 // ── HR final decisions (Task 13) ────────────────────────────────────────────
@@ -386,7 +390,7 @@ export async function approveAsHr(
     `Your ${typeLabel(request.leaveType)} request was approved. Enjoy your time off!`,
   );
   revalidateAfterDecision(id, request.userId);
-  return { ok: true };
+  redirect("/hr"); // spec §15: land back on the queue
 }
 
 export async function rejectAsHr(
@@ -408,7 +412,7 @@ export async function rejectAsHr(
     `Your ${typeLabel(request.leaveType)} request was rejected. Reason: ${comment}`,
   );
   revalidateAfterDecision(id, request.userId);
-  return { ok: true };
+  redirect("/hr"); // spec §15: land back on the queue
 }
 
 // ── Admin: balances and suspension (Task 15) ────────────────────────────────

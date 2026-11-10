@@ -14,7 +14,11 @@ let the AI agent build from them.
   session cookie.
 - **Four roles** – Employee, Supervisor, HR and Admin – each with its own home
   page. Nobody can open another role's pages.
-- **The app frame**: a top bar with the app name, who is logged in and **Log out**, in the Budiman HRMS style. The role home pages show only a short hint.
+- **The app frame**: a top bar with the app name, who is logged in, the
+  notification bell and **Log out**, in the Budiman HRMS style.
+- **The Leave Request module** (Session 2): drafts → submit → supervisor →
+  HR → approve, with comments, notifications, balances and admin tools. See
+  the table below.
 - **Building blocks** in `src/components/ui/` (Button, Card, PageHeader,
   dialogs, form fields…) to reuse when you build the module.
 - **The login spec** in `docs/specs/` – a worked example of the three spec
@@ -46,7 +50,10 @@ npm run db:seed        # 4. add the demo users
 npm run dev            # 5. start the app at http://localhost:3000
 ```
 
-To reset the demo users at any time, run `npm run db:seed` again.
+To reset the demo data at any time, run `npm run db:seed` again. It recreates
+the demo users **and** the leave demo data: 18 balances (Annual 12, Sick 12,
+Compassionate 3 — Unpaid is unlimited), 12 requests in every status, 6
+comments and 10 notifications (some unread, so the bell shows a number).
 
 **If something goes wrong**
 
@@ -71,6 +78,22 @@ All demo users share the password `password123`.
 | `hr-2@budiman.com`         | HR | `/hr` |
 | `admin@budiman.com`        | Admin | `/admin` |
 
+## Leave Request module (Session 2)
+
+Built from `docs/specs/` (Leave Request sections). What to try, per role:
+
+| Who | Where | Try |
+|-----|-------|-----|
+| Employee | `/employee` | Balance cards, your request list, **New request** → save as draft, edit, submit. Cancel a Submitted request (asks first). Sick over 2 days needs the certificate tick + note. |
+| Supervisor | `/supervisor` | Your division's Submitted requests, newest first, with the due-by date. Approve (→ HR), Reject or Send back — both need a comment. |
+| HR | `/hr` | Everything a supervisor approved. Approve (balance is consumed) or Reject with a comment. No send-back — that is a supervisor's job. |
+| Admin | `/admin` | Filter every request by person, type, status or date range, open a read-only record, and **Export CSV** (downloads exactly the filtered rows). |
+| Admin | `/admin/balances` | Set allowed days per person (Annual, Sick, Compassionate). |
+| Admin | `/admin/users` | Suspend / Reactivate accounts. A suspended person cannot log in; their data stays. |
+| Everyone | Top bar | The bell shows new notifications; clicking one marks it read and opens the request. |
+
+All requests, comments and notifications hold **made-up data only**.
+
 ## Scripts
 
 | Command            | What it does |
@@ -80,7 +103,8 @@ All demo users share the password `password123`.
 | `npm run start`    | Serve the production build. |
 | `npm run lint`     | Run ESLint. |
 | `npm run db:migrate` | Apply Prisma migrations. |
-| `npm run db:seed`  | Reseed the demo users. |
+| `npm run db:seed`  | Reseed the demo users and leave data. |
+| `npx tsx scripts/check-leave.ts` | Run the leave maths, action-table and seed sanity checks. |
 | `npm run db:studio` | Open Prisma Studio to inspect the data. |
 
 ## Specifications

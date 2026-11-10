@@ -1,0 +1,3 @@
+
+# local SQLite database (demo data, recreated by npm run db:seed)
+prisma/dev.db

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useActionState } from "react";
+import { useState, useActionState } from "react";
 import type { ActionResult } from "@/app/actions";
 import { Button } from "./ui/Button";
 import { Modal } from "./ui/Modal";
@@ -27,17 +27,21 @@ export function DecideDialog({
   sendBackAction?: FormAction;
 }) {
   const [dialog, setDialog] = useState<null | "reject" | "sendback">(null);
+  // Close the dialog once the server accepts the decision (done inside the
+  // action itself, so no state update is needed from an effect).
+  const closeOnOk = (fn: FormAction): FormAction => async (prev, formData) => {
+    const result = await fn(prev, formData);
+    if (result.ok) setDialog(null);
+    return result;
+  };
   const [approveState, approveForm, approving] = useActionState(approveAction, {});
-  const [rejectState, rejectForm, rejecting] = useActionState(rejectAction, {});
+  const [rejectState, rejectForm, rejecting] = useActionState(closeOnOk(rejectAction), {});
   const fallback = (_p: ActionResult, _f: FormData): Promise<ActionResult> =>
     Promise.resolve({ error: "This action is not available." });
-  const [sendState, sendForm, sending] = useActionState(sendBackAction ?? fallback, {});
-
-  // Close the dialog once the server accepts the decision.
-  useEffect(() => {
-    if (dialog === "reject" && rejectState.ok) setDialog(null);
-    if (dialog === "sendback" && sendState.ok) setDialog(null);
-  }, [dialog, rejectState.ok, sendState.ok]);
+  const [sendState, sendForm, sending] = useActionState(
+    closeOnOk(sendBackAction ?? fallback),
+    {},
+  );
 
   if (!canApprove && !canReject && !canSendBack) return null;
 

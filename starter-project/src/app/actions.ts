@@ -316,3 +316,28 @@ export async function sendBackAsSupervisor(
   revalidateAfterDecision(id, request.userId);
   return { ok: true };
 }
+
+export async function cancelLeave(
+  id: number,
+  _prev: ActionResult,
+  _formData: FormData,
+): Promise<ActionResult> {
+  const user = await requireUser();
+  const request = await prisma.leaveRequest.findUnique({
+    where: { id },
+    include: { user: true },
+  });
+  if (!request || request.userId !== user.id) {
+    return { error: "Request not found." };
+  }
+  if (!allowedAction("CANCEL", { id: user.id, role: user.role as Role }, toTarget(request, user))) {
+    return { error: "This request can no longer be cancelled." };
+  }
+
+  await prisma.leaveRequest.update({ where: { id }, data: { status: "CANCELLED" } });
+  revalidatePath("/employee");
+  revalidatePath(`/employee/leave/${id}`);
+  revalidatePath("/supervisor");
+  revalidatePath("/", "layout");
+  return { ok: true };
+}

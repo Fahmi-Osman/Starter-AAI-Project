@@ -10,6 +10,7 @@ import { buttonClasses } from "@/components/ui/Button";
 import { ArrowLeftIcon } from "@/components/ui/Icons";
 import { LeaveDetail } from "@/components/LeaveDetail";
 import { RequestActions } from "@/components/RequestActions";
+import { CommentTimeline } from "@/components/CommentTimeline";
 
 // The owner's request detail (Part B2 §13). Someone else's request id is
 // Not found here (AC-22). Action buttons are added by later tasks.
@@ -25,7 +26,10 @@ export default async function EmployeeLeaveDetailPage({
 
   const request = await prisma.leaveRequest.findUnique({
     where: { id: requestId },
-    include: { user: true },
+    include: {
+      user: true,
+      comments: { include: { author: true }, orderBy: { createdAt: "asc" } },
+    },
   });
   if (!request || request.userId !== user.id) notFound();
 
@@ -37,6 +41,7 @@ export default async function EmployeeLeaveDetailPage({
   };
   const canEdit = allowedAction("EDIT", actor, target);
   const canSubmit = allowedAction("SUBMIT", actor, target);
+  const canCancel = allowedAction("CANCEL", actor, target);
 
   return (
     <>
@@ -56,10 +61,16 @@ export default async function EmployeeLeaveDetailPage({
           </div>
         }
       />
-      <Card className="p-6">
-        <LeaveDetail request={request} />
-        <RequestActions requestId={requestId} canSubmit={canSubmit} />
-      </Card>
+      <div className="space-y-6">
+        <Card className="p-6">
+          <LeaveDetail request={request} />
+          <RequestActions requestId={requestId} canSubmit={canSubmit} canCancel={canCancel} />
+        </Card>
+        <Card className="p-6">
+          <h2 className="mb-4 text-base font-semibold text-slate-900">Comments</h2>
+          <CommentTimeline comments={request.comments} />
+        </Card>
+      </div>
     </>
   );
 }

@@ -250,7 +250,9 @@ async function loadDecidableBySupervisor(id: number, action: LeaveAction) {
 function revalidateAfterDecision(id: number, employeeId: number) {
   revalidatePath("/supervisor");
   revalidatePath("/hr");
+  revalidatePath("/employee");
   revalidatePath(`/supervisor/leave/${id}`);
+  revalidatePath(`/hr/leave/${id}`);
   revalidatePath(`/employee/leave/${id}`);
   revalidatePath("/", "layout");
   void employeeId;
@@ -339,5 +341,61 @@ export async function cancelLeave(
   revalidatePath(`/employee/leave/${id}`);
   revalidatePath("/supervisor");
   revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+// ── HR final decisions (Task 13) ────────────────────────────────────────────
+
+async function loadDecidableByHr(id: number, action: LeaveAction) {
+  const user = await requireUser();
+  const request = await prisma.leaveRequest.findUnique({
+    where: { id },
+    include: { user: true },
+  });
+  if (!request) return { user, request: null as null, error: "Request not found." };
+  if (!allowedAction(action, { id: user.id, role: user.role as Role }, toTarget(request, user))) {
+    return { user, request: null as null, error: "You cannot decide on this request." };
+  }
+  return { user, request, error: null };
+}
+
+export async function approveAsHr(
+  id: number,
+  _prev: ActionResult,
+  _formData: FormData,
+): Promise<ActionResult> {
+  const { request, error } = await loadDecidableByHr(id, "APPROVE");
+  if (!request) return { error: error ?? "Request not found." };
+
+  // Approval is where the balance is consumed — it is derived from APPROVED
+  // requests, so no counter is updated here (Part A2 §11.4).
+  await prisma.leaveRequest.update({ where: { id }, data: { status: "APPROVED" } });
+  await notifyEmployee(
+    request,
+    `Your ${typeLabel(request.leaveType)} request was approved. Enjoy your time off!`,
+  );
+  revalidateAfterDecision(id, request.userId);
+  return { ok: true };
+}
+
+export async function rejectAsHr(
+  id: number,
+  _prev: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  const { request, error } = await loadDecidableByHr(id, "REJECT");
+  if (!request) return { error: error ?? "Request not found." };
+  const comment = String(formData.get("comment") ?? "").trim();
+  if (!comment) return { error: "A comment is required to reject a request." };
+
+  await prisma.leaveComment.create({
+    data: { requestId: id, userId: (await requireUser()).id, body: comment },
+  });
+  await prisma.leaveRequest.update({ where: { id }, data: { status: "REJECTED" } });
+  await notifyEmployee(
+    request,
+    `Your ${typeLabel(request.leaveType)} request was rejected. Reason: ${comment}`,
+  );
+  revalidateAfterDecision(id, request.userId);
   return { ok: true };
 }

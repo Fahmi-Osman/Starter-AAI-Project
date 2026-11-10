@@ -6,10 +6,14 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { getCurrentUser, requireUser, startSession, endSession, roleHome } from "@/lib/auth";
 import type { Role } from "@/lib/constants";
-import { LEAVE_TYPES } from "@/lib/constants";
-import { allowedAction, calendarDays, submitCheck, workingDays } from "@/lib/leave";
+import { LEAVE_TYPES, LEAVE_TYPE_LABELS, type LeaveType } from "@/lib/constants";
+import { allowedAction, calendarDays, submitCheck, workingDays, type LeaveAction } from "@/lib/leave";
 import type { RequestTarget } from "@/lib/leave";
-import { notifySupervisors } from "@/lib/notifications";
+import { notifySupervisors, notifyEmployee } from "@/lib/notifications";
+
+function typeLabel(leaveType: string): string {
+  return LEAVE_TYPE_LABELS[leaveType as LeaveType] ?? leaveType;
+}
 
 // Server actions: functions that run on the server when a button is pressed.
 // Every leave action re-checks the Part A2 §11.7 action table itself —
@@ -226,4 +230,89 @@ export async function markNotificationRead(id: number, href: string): Promise<vo
   });
   revalidatePath("/", "layout");
   redirect(href);
+}
+
+// ── Supervisor decisions (Task 11) ─────────────────────────────────────────
+
+async function loadDecidableBySupervisor(id: number, action: LeaveAction) {
+  const user = await requireUser();
+  const request = await prisma.leaveRequest.findUnique({
+    where: { id },
+    include: { user: true },
+  });
+  if (!request) return { user, request: null as null, error: "Request not found." };
+  if (!allowedAction(action, { id: user.id, role: user.role as Role }, toTarget(request, user))) {
+    return { user, request: null as null, error: "You cannot decide on this request." };
+  }
+  return { user, request, error: null };
+}
+
+function revalidateAfterDecision(id: number, employeeId: number) {
+  revalidatePath("/supervisor");
+  revalidatePath("/hr");
+  revalidatePath(`/supervisor/leave/${id}`);
+  revalidatePath(`/employee/leave/${id}`);
+  revalidatePath("/", "layout");
+  void employeeId;
+}
+
+export async function approveAsSupervisor(
+  id: number,
+  _prev: ActionResult,
+  _formData: FormData,
+): Promise<ActionResult> {
+  const { request, error } = await loadDecidableBySupervisor(id, "APPROVE");
+  if (!request) return { error: error ?? "Request not found." };
+
+  await prisma.leaveRequest.update({ where: { id }, data: { status: "PENDING_HR_REVIEW" } });
+  await notifyEmployee(
+    request,
+    `Your ${typeLabel(request.leaveType)} request was approved by your supervisor and is now with HR.`,
+  );
+  revalidateAfterDecision(id, request.userId);
+  return { ok: true };
+}
+
+export async function rejectAsSupervisor(
+  id: number,
+  _prev: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  const { request, error } = await loadDecidableBySupervisor(id, "REJECT");
+  if (!request) return { error: error ?? "Request not found." };
+  const comment = String(formData.get("comment") ?? "").trim();
+  if (!comment) return { error: "A comment is required to reject a request." };
+
+  await prisma.leaveComment.create({
+    data: { requestId: id, userId: (await requireUser()).id, body: comment },
+  });
+  await prisma.leaveRequest.update({ where: { id }, data: { status: "REJECTED" } });
+  await notifyEmployee(
+    request,
+    `Your ${typeLabel(request.leaveType)} request was rejected. Reason: ${comment}`,
+  );
+  revalidateAfterDecision(id, request.userId);
+  return { ok: true };
+}
+
+export async function sendBackAsSupervisor(
+  id: number,
+  _prev: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  const { request, error } = await loadDecidableBySupervisor(id, "SEND_BACK");
+  if (!request) return { error: error ?? "Request not found." };
+  const comment = String(formData.get("comment") ?? "").trim();
+  if (!comment) return { error: "A comment is required to send a request back." };
+
+  await prisma.leaveComment.create({
+    data: { requestId: id, userId: (await requireUser()).id, body: comment },
+  });
+  await prisma.leaveRequest.update({ where: { id }, data: { status: "SENT_BACK" } });
+  await notifyEmployee(
+    request,
+    `Your ${typeLabel(request.leaveType)} request was sent back for revision. Note: ${comment}`,
+  );
+  revalidateAfterDecision(id, request.userId);
+  return { ok: true };
 }

@@ -22,6 +22,7 @@ model User {
   identificationNo String
   designation      String
   division         String
+  suspended        Boolean  @default(false) // Admin suspends/reactivates (Part A2 §9, rule 10)
   createdAt        DateTime @default(now())
 
   leaveRequests LeaveRequest[]

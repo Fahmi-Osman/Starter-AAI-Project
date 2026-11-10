@@ -134,6 +134,17 @@ type. One number to keep right instead of two.
 Only the app creates notifications (rule 11). A user can only mark **their
 own** as read; nobody edits or deletes them.
 
+### One extra field on `User` – suspension (U16)
+
+| Field | Type | Required? | What it holds |
+|-------|------|-----------|---------------|
+| `suspended` | yes/no | yes, default no | Is this account suspended? Set by Admin on `/admin/users` |
+
+A suspended user **cannot log in** (rule 10): `loginAction` checks this
+flag before starting a session and shows "Account is suspended – contact
+HR". Nothing is deleted — requests, comments and balances stay, so other
+roles still see them (AC-26).
+
 ## 10. Statuses
 
 Every request carries exactly one of these seven words (plain text, list

@@ -80,6 +80,7 @@ async function main() {
   expect("users", await prisma.user.count(), 7);
   expect("balances", await prisma.leaveBalance.count(), 18);
   expect("requests", await prisma.leaveRequest.count(), 12);
+  expect("seeded users all start active (Task 15)", await prisma.user.count({ where: { suspended: true } }), 0);
 
   await prisma.$disconnect();
   if (failures > 0) {

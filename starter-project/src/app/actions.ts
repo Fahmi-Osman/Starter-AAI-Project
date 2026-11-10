@@ -6,7 +6,12 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { getCurrentUser, requireUser, startSession, endSession, roleHome } from "@/lib/auth";
 import type { Role } from "@/lib/constants";
-import { LEAVE_TYPES, LEAVE_TYPE_LABELS, type LeaveType } from "@/lib/constants";
+import {
+  BALANCED_LEAVE_TYPES,
+  LEAVE_TYPES,
+  LEAVE_TYPE_LABELS,
+  type LeaveType,
+} from "@/lib/constants";
 import { allowedAction, calendarDays, submitCheck, workingDays, type LeaveAction } from "@/lib/leave";
 import type { RequestTarget } from "@/lib/leave";
 import { notifySupervisors, notifyEmployee } from "@/lib/notifications";
@@ -98,6 +103,12 @@ export async function loginAction(
   const user = await prisma.user.findUnique({ where: { email } });
   if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
     return { error: "Invalid email or password." };
+  }
+
+  // Checked only after the password is right, so the message never reveals
+  // which emails exist (Part A2 §9, rule 10).
+  if (user.suspended) {
+    return { error: "Account is suspended – contact HR." };
   }
 
   await startSession(user);
@@ -397,5 +408,72 @@ export async function rejectAsHr(
     `Your ${typeLabel(request.leaveType)} request was rejected. Reason: ${comment}`,
   );
   revalidateAfterDecision(id, request.userId);
+  return { ok: true };
+}
+
+// ── Admin: balances and suspension (Task 15) ────────────────────────────────
+
+async function requireAdminAction(): Promise<ActionResult | null> {
+  const user = await getCurrentUser();
+  if (!user || user.role !== "ADMIN") {
+    return { error: "Only an admin can do that." };
+  }
+  return null;
+}
+
+// One row per person per limited leave type (Part A2 §9): the balances page
+// saves a whole row at once. Unpaid has no row and is not editable.
+export async function setBalance(
+  userId: number,
+  _prev: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  const denied = await requireAdminAction();
+  if (denied) return denied;
+
+  // Validate everything first so a bad cell never saves half the row.
+  const values: { leaveType: string; days: number }[] = [];
+  for (const leaveType of BALANCED_LEAVE_TYPES) {
+    const raw = String(formData.get(`days-${leaveType}`) ?? "").trim();
+    if (raw === "") continue; // left blank: keep the current value
+    const days = Number(raw);
+    if (!Number.isInteger(days) || days < 0 || days > 365) {
+      return {
+        error: `${typeLabel(leaveType)}: allowed days must be a whole number between 0 and 365.`,
+      };
+    }
+    values.push({ leaveType, days });
+  }
+
+  for (const v of values) {
+    await prisma.leaveBalance.upsert({
+      where: { userId_leaveType: { userId, leaveType: v.leaveType } },
+      update: { daysAllowed: v.days },
+      create: { userId, leaveType: v.leaveType, daysAllowed: v.days },
+    });
+  }
+  revalidatePath("/admin/balances");
+  revalidatePath("/employee");
+  return { ok: true };
+}
+
+// Suspension blocks login but keeps every request, comment and balance
+// (Part A2 §9, rule 10 / AC-26). An admin cannot suspend their own account.
+export async function setSuspended(
+  userId: number,
+  suspended: boolean,
+  _prev: ActionResult,
+  _formData: FormData,
+): Promise<ActionResult> {
+  const admin = await getCurrentUser();
+  if (!admin || admin.role !== "ADMIN") {
+    return { error: "Only an admin can do that." };
+  }
+  if (admin.id === userId) {
+    return { error: "You cannot suspend your own account." };
+  }
+
+  await prisma.user.update({ where: { id: userId }, data: { suspended } });
+  revalidatePath("/admin/users");
   return { ok: true };
 }
